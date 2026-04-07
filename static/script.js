@@ -33,26 +33,20 @@ function getDevice() {
   return "Laptop";
 }
 
-// ✅ FIXED LOCATION (SAFE + VPN SUPPORT)
+// ✅ FINAL FIXED LOCATION (VPN FRIENDLY)
 async function getLocation() {
   try {
-    let res = await fetch("https://ipwho.is/?t=" + Date.now(), { cache: "no-store" });
-    let data = await res.json();
-    if (data.success && data.country) return data.country;
-  } catch {}
-
-  try {
-    const ipRes = await fetch("https://api.ipify.org?format=json");
-    const ipData = await ipRes.json();
-
-    const res = await fetch(`https://ipapi.co/${ipData.ip}/json/`);
+    const res = await fetch("https://ipapi.co/json/");
     const data = await res.json();
 
-    if (data.country_name) return data.country_name;
-  } catch {}
+    if (data && data.country_name) {
+      return data.country_name;
+    }
+  } catch (e) {
+    console.log("Location fetch failed:", e);
+  }
 
-  // fallback (same as your original logic)
-  return "India";
+  return "India"; // fallback (same behavior as before)
 }
 
 // ================= SIGNUP =================
