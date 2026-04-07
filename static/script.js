@@ -33,7 +33,7 @@ function getDevice() {
   return "Laptop";
 }
 
-// LOCATION
+// ✅ FIXED LOCATION (ONLY CHANGE)
 async function getLocation() {
   try {
     let res = await fetch("https://ipwho.is/?t=" + Date.now(), { cache: "no-store" });
@@ -41,7 +41,17 @@ async function getLocation() {
     if (data.success && data.country) return data.country;
   } catch {}
 
-  return "India";
+  try {
+    const ipRes = await fetch("https://api.ipify.org?format=json");
+    const ipData = await ipRes.json();
+
+    const res = await fetch(`https://ipapi.co/${ipData.ip}/json/`);
+    const data = await res.json();
+
+    if (data.country_name) return data.country_name;
+  } catch {}
+
+  return "Unknown";
 }
 
 // ================= SIGNUP =================
@@ -80,10 +90,8 @@ window.login = async () => {
   let failedAttempts = parseInt(localStorage.getItem(email + "_failedAttempts")) || 0;
 
   try {
-    // 🔥 AUTH LOGIN
     const userCred = await signInWithEmailAndPassword(auth, email, password);
 
-    // ✅ RESET FAIL COUNT
     localStorage.setItem(email + "_failedAttempts", 0);
 
     localStorage.setItem("uid", userCred.user.uid);
@@ -127,7 +135,6 @@ window.login = async () => {
       console.log("ML failed → SAFE fallback");
     }
 
-    // 🔐 RISK LOGIN → OTP
     if (prediction === 1) {
 
       localStorage.setItem(email + "_finalFailedAttempts", failedAttempts);
@@ -149,9 +156,7 @@ window.login = async () => {
       alert("OTP sent to your email 📧");
       window.location = "/otp";
 
-    } 
-    // ✅ SAFE LOGIN
-    else {
+    } else {
 
       await storeData(failedAttempts);
       window.location = "/home";
@@ -159,7 +164,6 @@ window.login = async () => {
 
   } catch (e) {
 
-    // ❌ SIMPLE FAILURE HANDLING
     failedAttempts++;
 
     localStorage.setItem(email + "_failedAttempts", failedAttempts);
