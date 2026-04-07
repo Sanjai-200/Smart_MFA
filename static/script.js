@@ -5,7 +5,8 @@ import {
   signInWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
 
-import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+// 🔥 ADD THIS IMPORT (NEW)
+import { doc, setDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
 // ROUTES
 window.goSignup = () => window.location = "/signup";
@@ -33,20 +34,30 @@ function getDevice() {
   return "Laptop";
 }
 
-// ✅ FINAL FIXED LOCATION (VPN FRIENDLY)
+// ✅ ✅ REPLACED LOCATION (FROM YOUR WORKING CODE)
 async function getLocation() {
   try {
-    const res = await fetch("https://ipapi.co/json/");
-    const data = await res.json();
+    let res = await fetch("https://ipwho.is/?t=" + Date.now(), { cache: "no-store" });
+    let data = await res.json();
 
-    if (data && data.country_name) {
-      return data.country_name;
-    }
+    if (data.success && data.country) return data.country;
   } catch (e) {
-    console.log("Location fetch failed:", e);
+    console.log("Primary API failed:", e);
   }
 
-  return "India"; // fallback (same behavior as before)
+  try {
+    const ipRes = await fetch("https://api.ipify.org?format=json");
+    const ipData = await ipRes.json();
+
+    const res = await fetch(`https://ipapi.co/${ipData.ip}/json/`);
+    const data = await res.json();
+
+    if (data.country_name) return data.country_name;
+  } catch (e) {
+    console.log("Fallback failed:", e);
+  }
+
+  return "India";
 }
 
 // ================= SIGNUP =================
@@ -73,7 +84,7 @@ window.signup = async () => {
     window.location = "/";
 
   } catch (e) {
-    document.getElementById("msg").innerText = "Signup failed ❌";
+    document.getElementById("msg").innerText = e.message;
   }
 };
 
@@ -82,21 +93,25 @@ window.login = async () => {
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
 
-  let failedAttempts = parseInt(localStorage.getItem(email + "_failedAttempts")) || 0;
+  let failedAttempts = parseInt(localStorage.getItem("failedAttempts")) || 0;
 
   try {
     const userCred = await signInWithEmailAndPassword(auth, email, password);
-
-    localStorage.setItem(email + "_failedAttempts", 0);
 
     localStorage.setItem("uid", userCred.user.uid);
     localStorage.setItem("email", userCred.user.email);
 
     const device = getDevice();
     const location = await getLocation();
-    const time = new Date().toLocaleTimeString();
 
+    const now = new Date();
+    const time = now.toLocaleTimeString();
+
+    // 🔥 GET REAL LOGIN COUNT
     const { db } = await import("/static/firebase.js");
+    const { doc, getDoc } = await import(
+      "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js"
+    );
 
     const ref = doc(db, "activity", userCred.user.uid);
     const snap = await getDoc(ref);
@@ -106,62 +121,42 @@ window.login = async () => {
       loginCount = (snap.data().loginCount || 0) + 1;
     }
 
-    let prediction = 0;
+    // ML CALL
+    const response = await fetch("/predict", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        device,
+        location,
+        loginCount,
+        failedAttempts,
+        time
+      })
+    });
 
-    try {
-      const response = await fetch("/predict", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          device,
-          location,
-          loginCount,
-          failedAttempts,
-          time
-        })
-      });
+    const result = await response.json();
 
-      const data = await response.json();
-      if (typeof data.prediction === "number") {
-        prediction = data.prediction;
-      }
+    if (result.prediction === 0) {
 
-    } catch {
-      console.log("ML failed → SAFE fallback");
-    }
+      await storeData(failedAttempts);
 
-    if (prediction === 1) {
+      localStorage.setItem("failedAttempts", 0);
+      window.location = "/home";
 
-      localStorage.setItem(email + "_finalFailedAttempts", failedAttempts);
+    } else {
+      localStorage.setItem("finalFailedAttempts", failedAttempts);
 
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
       localStorage.setItem("otp", otp);
       localStorage.setItem("otpTime", Date.now());
 
-      await fetch("/send-otp", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          email: userCred.user.email,
-          otp: otp
-        })
-      });
-
-      alert("OTP sent to your email 📧");
+      alert("OTP: " + otp);
       window.location = "/otp";
-
-    } else {
-
-      await storeData(failedAttempts);
-      window.location = "/home";
     }
 
-  } catch (e) {
-
+  } catch {
     failedAttempts++;
-
-    localStorage.setItem(email + "_failedAttempts", failedAttempts);
+    localStorage.setItem("failedAttempts", failedAttempts);
 
     document.getElementById("msg").innerText =
       "Login failed ❌ (" + failedAttempts + ")";
