@@ -117,12 +117,19 @@ window.login = async () => {
 
     const result = await response.json();
 
+    // ✅ SAFE LOGIN
     if (result.prediction === 0) {
+
+      await storeData(failedAttempts);   // 🔥 FIXED (IMPORTANT)
 
       localStorage.setItem("failedAttempts", 0);
       window.location = "/home";
 
-    } else {
+    } 
+    // ⚠️ RISK LOGIN
+    else {
+
+      localStorage.setItem("finalFailedAttempts", failedAttempts); // 🔥 FIXED
 
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
