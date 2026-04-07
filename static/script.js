@@ -102,25 +102,33 @@ window.login = async () => {
       loginCount = (snap.data().loginCount || 0) + 1;
     }
 
-    // ML CALL
-    const response = await fetch("/predict", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        device,
-        location,
-        loginCount,
-        failedAttempts,
-        time
-      })
-    });
+    // 🔥 SAFE DEFAULT (IMPORTANT FIX)
+    let result = { prediction: 0 };
 
-    const result = await response.json();
+    try {
+      // ML CALL
+      const response = await fetch("/predict", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          device,
+          location,
+          loginCount,
+          failedAttempts,
+          time
+        })
+      });
+
+      result = await response.json();
+
+    } catch (e) {
+      console.log("ML API failed → fallback to safe login", e);
+    }
 
     // ✅ SAFE LOGIN
     if (result.prediction === 0) {
 
-      await storeData(failedAttempts);   // 🔥 FIXED (IMPORTANT)
+      await storeData(failedAttempts);
 
       localStorage.setItem("failedAttempts", 0);
       window.location = "/home";
@@ -129,14 +137,13 @@ window.login = async () => {
     // ⚠️ RISK LOGIN
     else {
 
-      localStorage.setItem("finalFailedAttempts", failedAttempts); // 🔥 FIXED
+      localStorage.setItem("finalFailedAttempts", failedAttempts);
 
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
       localStorage.setItem("otp", otp);
       localStorage.setItem("otpTime", Date.now());
 
-      // 🔥 SEND OTP TO FLASK
       await fetch("/send-otp", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -151,7 +158,7 @@ window.login = async () => {
       window.location = "/otp";
     }
 
-  } catch {
+  } catch (e) {
     failedAttempts++;
     localStorage.setItem("failedAttempts", failedAttempts);
 
