@@ -3,22 +3,24 @@ async function verifyOTP() {
   const entered = document.getElementById("otpInput").value.trim();
 
   const otp = localStorage.getItem("otp");
-  const time = localStorage.getItem("otpTime");
 
-  if (!otp || !time) {
+  const email = localStorage.getItem("email");
+
+  if (!otp) {
     document.getElementById("msg").innerText = "OTP not found.";
     return;
   }
 
   if (entered === otp) {
+
     document.getElementById("msg").innerText = "OTP Verified ✅";
 
     const failedAttempts =
-      parseInt(localStorage.getItem("finalFailedAttempts")) || 0;
+      parseInt(localStorage.getItem(email + "_finalFailedAttempts")) || 0;
 
     await storeData(failedAttempts);
 
-    localStorage.setItem("failedAttempts", 0);
+    localStorage.setItem(email + "_failedAttempts", 0);
 
     setTimeout(() => {
       window.location = "/home";
@@ -29,7 +31,6 @@ async function verifyOTP() {
   }
 }
 
-
 // ================= RESEND OTP =================
 async function resendOTP() {
   const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -37,7 +38,6 @@ async function resendOTP() {
   localStorage.setItem("otp", newOtp);
   localStorage.setItem("otpTime", Date.now());
 
-  // 🔥 SEND OTP TO EMAIL (Flask)
   await fetch("/send-otp", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
@@ -47,31 +47,8 @@ async function resendOTP() {
     })
   });
 
-  document.getElementById("msg").innerText = "New OTP sent to your email 📧";
+  document.getElementById("msg").innerText = "New OTP sent 📧";
 }
-
-
-// ================= LOCATION =================
-async function getLocation() {
-  try {
-    let res = await fetch("https://ipwho.is/?t=" + Date.now(), { cache: "no-store" });
-    let data = await res.json();
-    if (data.success && data.country) return data.country;
-  } catch {}
-
-  try {
-    const ipRes = await fetch("https://api.ipify.org?format=json");
-    const ipData = await ipRes.json();
-
-    const res = await fetch(`https://ipapi.co/${ipData.ip}/json/`);
-    const data = await res.json();
-
-    if (data.country_name) return data.country_name;
-  } catch {}
-
-  return "India";
-}
-
 
 // ================= STORE DATA =================
 async function storeData(failedAttempts) {
@@ -91,7 +68,7 @@ async function storeData(failedAttempts) {
     ? "Mobile"
     : "Laptop";
 
-  const location = await getLocation();
+  const location = "India";
 
   const ref = doc(db, "activity", uid);
   const snap = await getDoc(ref);
@@ -112,7 +89,6 @@ async function storeData(failedAttempts) {
   });
 }
 
-
-// ================= EVENT LISTENERS =================
+// EVENTS
 document.getElementById("verifyBtn").addEventListener("click", verifyOTP);
 document.getElementById("resendBtn").addEventListener("click", resendOTP);
