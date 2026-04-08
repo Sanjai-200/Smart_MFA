@@ -33,13 +33,15 @@ function getDevice() {
   return "Laptop";
 }
 
-// ✅ YOUR ORIGINAL WORKING LOCATION FUNCTION (UNCHANGED)
+// ✅ FIXED LOCATION (MFA + SMART MERGED)
 async function getLocation() {
   try {
     let res = await fetch("https://ipwho.is/?t=" + Date.now(), { cache: "no-store" });
     let data = await res.json();
 
-    if (data.success && data.country) return data.country;
+    if (data && data.success && data.country) {
+      return data.country;
+    }
   } catch (e) {
     console.log("Primary API failed:", e);
   }
@@ -51,12 +53,14 @@ async function getLocation() {
     const res = await fetch(`https://ipapi.co/${ipData.ip}/json/`);
     const data = await res.json();
 
-    if (data.country_name) return data.country_name;
+    if (data && data.country_name) {
+      return data.country_name;
+    }
   } catch (e) {
-    console.log("Fallback failed:", e);
+    console.log("Fallback API failed:", e);
   }
 
-  return "India";
+  return "Unknown"; // 🔥 DO NOT force India
 }
 
 // ================= SIGNUP =================
@@ -97,16 +101,14 @@ window.login = async () => {
   try {
     const userCred = await signInWithEmailAndPassword(auth, email, password);
 
+    // reset fail count
     localStorage.setItem(email + "_failedAttempts", 0);
 
     localStorage.setItem("uid", userCred.user.uid);
     localStorage.setItem("email", userCred.user.email);
 
     const device = getDevice();
-
-    // ✅ CALL LOCATION ONLY ONCE
-    const location = await getLocation();
-
+    const location = await getLocation();   // ✅ ONLY ONCE
     const time = new Date().toLocaleTimeString();
 
     const { db } = await import("/static/firebase.js");
@@ -143,7 +145,7 @@ window.login = async () => {
       console.log("ML failed → SAFE fallback");
     }
 
-    // 🔐 RISK LOGIN → OTP EMAIL
+    // 🔐 RISK LOGIN → EMAIL OTP
     if (prediction === 1) {
 
       localStorage.setItem(email + "_finalFailedAttempts", failedAttempts);
@@ -153,6 +155,7 @@ window.login = async () => {
       localStorage.setItem("otp", otp);
       localStorage.setItem("otpTime", Date.now());
 
+      // ✅ EMAIL OTP (NO ALERT)
       await fetch("/send-otp", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -176,7 +179,6 @@ window.login = async () => {
   } catch (e) {
 
     failedAttempts++;
-
     localStorage.setItem(email + "_failedAttempts", failedAttempts);
 
     document.getElementById("msg").innerText =
@@ -185,8 +187,7 @@ window.login = async () => {
 };
 
 // ================= STORE DATA =================
-async function storeData(failedAttempts, location) { // ✅ RECEIVE LOCATION
-
+async function storeData(failedAttempts, location) {
   const { db } = await import("/static/firebase.js");
   const { doc, setDoc, getDoc } = await import(
     "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js"
@@ -203,8 +204,6 @@ async function storeData(failedAttempts, location) { // ✅ RECEIVE LOCATION
     ? "Mobile"
     : "Laptop";
 
-  // ❌ REMOVED SECOND API CALL
-
   const ref = doc(db, "activity", uid);
   const snap = await getDoc(ref);
 
@@ -215,7 +214,7 @@ async function storeData(failedAttempts, location) { // ✅ RECEIVE LOCATION
 
   await setDoc(ref, {
     email,
-    location, // ✅ USE ORIGINAL VALUE
+    location,   // ✅ correct location stored
     device,
     date,
     time,
