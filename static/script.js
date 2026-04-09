@@ -21,29 +21,56 @@ function getDevice() {
   return "Laptop";
 }
 
-// ================= LOCATION (VPN-aware, 3-API chain) =================
+// ================= LOCATION (VPN-proof, 4-API chain) =================
+// Each API returns the VPN EXIT country when a VPN is active.
 async function getLocation() {
-  // API 1 - ipwho.is (detects VPN exit country)
+
+  // API 1: ipapi.co — very reliable, no CORS issues
   try {
-    const res  = await fetch("https://ipwho.is/?t=" + Date.now(), { cache: "no-store" });
+    const res  = await fetch("https://ipapi.co/json/", {
+      headers: { "Accept": "application/json" },
+      cache:   "no-store"
+    });
     const data = await res.json();
-    if (data.success && data.country) return data.country;
+    if (data.country_name && data.country_name !== "None") {
+      console.log("Location from ipapi.co:", data.country_name);
+      return data.country_name;
+    }
   } catch {}
 
-  // API 2 - ip-api.com (free, reliable)
+  // API 2: ip-api.com — returns VPN server location
   try {
-    const res  = await fetch("https://ip-api.com/json/?fields=status,country");
+    const res  = await fetch("https://ip-api.com/json/?fields=status,country", {
+      cache: "no-store"
+    });
     const data = await res.json();
-    if (data.status === "success" && data.country) return data.country;
+    if (data.status === "success" && data.country) {
+      console.log("Location from ip-api.com:", data.country);
+      return data.country;
+    }
   } catch {}
 
-  // API 3 - ipapi.co (last resort)
+  // API 3: ipwho.is — fallback
   try {
-    const res  = await fetch("https://ipapi.co/json/");
+    const res  = await fetch("https://ipwho.is/", { cache: "no-store" });
     const data = await res.json();
-    if (data.country_name) return data.country_name;
+    if (data.success && data.country) {
+      console.log("Location from ipwho.is:", data.country);
+      return data.country;
+    }
   } catch {}
 
+  // API 4: freeipapi.com — last resort
+  try {
+    const res  = await fetch("https://freeipapi.com/api/json", { cache: "no-store" });
+    const data = await res.json();
+    if (data.countryName) {
+      console.log("Location from freeipapi:", data.countryName);
+      return data.countryName;
+    }
+  } catch {}
+
+  console.warn("All location APIs failed, returning Unknown");
   return "Unknown";
 }
 
@@ -56,12 +83,9 @@ window.signup = async () => {
   try {
     const userCred = await createUserWithEmailAndPassword(auth, email, password);
     const { db }   = await import("/static/firebase.js");
-
     await setDoc(doc(db, "users", userCred.user.uid), { username, email });
-
     alert("Account created!");
     window.location = "/";
-
   } catch (e) {
     document.getElementById("msg").innerText = e.message;
   }
@@ -72,44 +96,85 @@ window.login = async () => {
   const email    = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
 
-  // Get failed attempts for THIS session (reset each login attempt sequence)
+  // Read current session failed attempts BEFORE attempting login
   let failedAttempts = parseInt(localStorage.getItem(email + "_failedAttempts")) || 0;
 
+  // ── STEP 1: Authenticate with Firebase ──────────────────────────────────
+  // Separate try/catch ONLY for auth — so wrong password is the ONLY
+  // thing that ever increments failedAttempts.
+  let userCred;
   try {
-    const userCred = await signInWithEmailAndPassword(auth, email, password);
+    userCred = await signInWithEmailAndPassword(auth, email, password);
+  } catch (authError) {
+    // ✅ Password was actually wrong — increment
+    failedAttempts++;
+    localStorage.setItem(email + "_failedAttempts", failedAttempts);
+    document.getElementById("msg").innerText = "Login failed ❌ (" + failedAttempts + ")";
+    return; // stop — don't run any post-login code
+  }
 
-    // Store for use in otp.js after redirect
-    localStorage.setItem("email", userCred.user.email);
-    localStorage.setItem("uid",   userCred.user.uid);
+  // ── STEP 2: Auth succeeded — IMMEDIATELY reset failed attempts ───────────
+  // Save snapshot of how many failed attempts happened this session
+  const sessionFailedAttempts = failedAttempts;
+  // Reset RIGHT NOW so even if anything below errors, it won't keep climbing
+  localStorage.setItem(email + "_failedAttempts", 0);
 
-    const device   = getDevice();
-    const location = await getLocation();
-    const time     = new Date().toLocaleTimeString();
+  // Store identity for otp.js
+  localStorage.setItem("email", userCred.user.email);
+  localStorage.setItem("uid",   userCred.user.uid);
 
+  // ── STEP 3: Collect context (non-critical, won't affect login flow) ──────
+  let device   = getDevice();
+  let location = "Unknown";
+  let time     = new Date().toLocaleTimeString();
+
+  try {
+    location = await getLocation();
+    time     = new Date().toLocaleTimeString();
+  } catch {}
+
+  // ── STEP 4: Get loginCount from Firestore ────────────────────────────────
+  let loginCount = 1;
+  try {
     const { db } = await import("/static/firebase.js");
     const ref    = doc(db, "activity", userCred.user.uid);
     const snap   = await getDoc(ref);
+    loginCount   = snap.exists() ? (snap.data().loginCount || 0) + 1 : 1;
+  } catch {}
 
-    // loginCount: always +1 from stored value
-    let loginCount = snap.exists() ? (snap.data().loginCount || 0) + 1 : 1;
+  // Save all pending data for otp.js to use after OTP verification
+  localStorage.setItem("pendingDevice",         device);
+  localStorage.setItem("pendingLocation",       location);
+  localStorage.setItem("pendingTime",           time);
+  localStorage.setItem("pendingLoginCount",     loginCount);
+  localStorage.setItem("pendingFailedAttempts", sessionFailedAttempts);
 
-    // Store context for otp.js to use after OTP verify
-    localStorage.setItem("pendingDevice",        device);
-    localStorage.setItem("pendingLocation",      location);
-    localStorage.setItem("pendingTime",          time);
-    localStorage.setItem("pendingLoginCount",    loginCount);
-    localStorage.setItem("pendingFailedAttempts", failedAttempts);
-
-    // Call ML prediction
+  // ── STEP 5: ML Prediction ────────────────────────────────────────────────
+  let prediction = 0; // default to safe if /predict unreachable
+  try {
     const res    = await fetch("/predict", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ device, location, loginCount, failedAttempts, time })
+      body:    JSON.stringify({
+        device,
+        location,
+        loginCount,
+        failedAttempts: sessionFailedAttempts,
+        time
+      })
     });
     const result = await res.json();
+    if (typeof result.prediction === "number") {
+      prediction = result.prediction;
+    }
+  } catch {}
 
-    if (result.prediction === 0) {
-      // SAFE — store activity and go home
+  // ── STEP 6: Route based on prediction ───────────────────────────────────
+  if (prediction === 0) {
+    // SAFE — save activity and go home
+    try {
+      const { db } = await import("/static/firebase.js");
+      const ref    = doc(db, "activity", userCred.user.uid);
       await setDoc(ref, {
         email,
         location,
@@ -117,33 +182,26 @@ window.login = async () => {
         date:           new Date().toISOString().split("T")[0],
         time,
         loginCount,
-        failedAttempts: failedAttempts   // overwrite with this session's count
+        failedAttempts: sessionFailedAttempts  // overwrite with THIS session's count
       });
+    } catch {}
 
-      // Reset failed attempts after successful login
-      localStorage.setItem(email + "_failedAttempts", 0);
+    window.location = "/home";
 
-      window.location = "/home";
+  } else {
+    // RISKY — send OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    localStorage.setItem("otp",     otp);
+    localStorage.setItem("otpTime", Date.now());
 
-    } else {
-      // RISKY — generate OTP and send
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      localStorage.setItem("otp",     otp);
-      localStorage.setItem("otpTime", Date.now());
-
+    try {
       await fetch("/send-otp", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ email: userCred.user.email, otp })
       });
+    } catch {}
 
-      window.location = "/otp";
-    }
-
-  } catch (e) {
-    // Wrong password / auth error → increment failed attempts
-    failedAttempts++;
-    localStorage.setItem(email + "_failedAttempts", failedAttempts);
-    document.getElementById("msg").innerText = "Login failed ❌ (" + failedAttempts + ")";
+    window.location = "/otp";
   }
 };
