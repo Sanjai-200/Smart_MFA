@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 # ================= CONFIG =================
 EMAIL_SENDER = "smart7mfa@gmail.com"
-EMAIL_PASSWORD = "rnokxuzddimxpgob"  # ⚠️ keep no spaces
+EMAIL_PASSWORD = "rrtqyuewapzspkgk"  # ⚠️ keep no spaces
 
 # ================= LOAD MODEL =================
 try:
