@@ -1,15 +1,18 @@
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 import pickle
 import pandas as pd
 from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
+import requests
 
 app = Flask(__name__)
+CORS(app)
 
 # ================= CONFIG =================
 EMAIL_SENDER = "smart7mfa@gmail.com"
-EMAIL_PASSWORD = "rnokxuzddimxpgob"  # no spaces
+EMAIL_PASSWORD = "rnokxuzddimxpgob"
 
 # ================= LOAD MODEL =================
 try:
@@ -21,14 +24,18 @@ except Exception as e:
     model = None
 
 
-# ================= EMAIL FUNCTION =================
+# ================= EMAIL =================
 def send_email(to_email, otp):
-    if not to_email or not otp:
-        print("❌ Invalid email/otp")
-        return False
+    msg = MIMEText(f"""
+Hello,
 
-    msg = MIMEText(f"Your OTP is: {otp}")
-    msg["Subject"] = "Smart MFA - OTP Verification"
+Your OTP is: {otp}
+Valid for 2 minutes.
+
+- Smart MFA
+""")
+
+    msg["Subject"] = "OTP Verification"
     msg["From"] = EMAIL_SENDER
     msg["To"] = to_email
 
@@ -39,12 +46,32 @@ def send_email(to_email, otp):
         server.sendmail(EMAIL_SENDER, to_email, msg.as_string())
         server.quit()
 
-        print(f"✅ OTP sent to {to_email}")
+        print("✅ OTP sent:", to_email)
         return True
-
     except Exception as e:
         print("❌ Email error:", e)
         return False
+
+
+# ================= LOCATION =================
+def get_location(request):
+    try:
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+
+        if ip == "127.0.0.1":
+            ip = requests.get("https://api.ipify.org").text
+
+        res = requests.get(f"http://ip-api.com/json/{ip}")
+        data = res.json()
+
+        location = data.get("country", "Unknown")
+
+        print("🌍 IP:", ip)
+        print("🌍 Location:", location)
+
+        return location
+    except:
+        return "Unknown"
 
 
 # ================= ROUTES =================
@@ -52,117 +79,84 @@ def send_email(to_email, otp):
 def login():
     return render_template("index.html")
 
-
 @app.route("/signup")
 def signup():
     return render_template("signup.html")
 
-
 @app.route("/otp")
 def otp():
     return render_template("otp.html")
-
 
 @app.route("/home")
 def home():
     return render_template("home.html")
 
 
-# ================= OTP ROUTE =================
+# ================= OTP =================
 @app.route("/send-otp", methods=["POST"])
 def send_otp():
-    data = request.get_json() or {}
+    data = request.get_json()
 
     email = data.get("email")
     otp = data.get("otp")
 
     if not email or not otp:
-        return jsonify({"status": "error", "message": "Invalid data"}), 400
+        return jsonify({"success": False}), 400
 
     success = send_email(email, otp)
 
-    return jsonify({"status": "sent" if success else "failed"})
+    return jsonify({"success": success})
 
 
 # ================= HELPERS =================
-def safe_int(value, default=0):
+def safe_int(v, d=0):
     try:
-        return int(value)
+        return int(v)
     except:
-        return default
+        return d
 
-
-def parse_time(time_str):
-    if not time_str:
+def parse_time(t):
+    try:
+        return datetime.strptime(t, "%I:%M:%S %p").hour
+    except:
         return 12
 
-    try:
-        time_str = str(time_str)
+def parse_location(loc):
+    return 0 if str(loc).lower() in ["india", "unknown"] else 1
 
-        # 24-hour format
-        if ":" in time_str and "AM" not in time_str and "PM" not in time_str:
-            return int(time_str.split(":")[0])
-
-        # 12-hour format
-        if "AM" in time_str or "PM" in time_str:
-            try:
-                return datetime.strptime(time_str, "%I:%M:%S %p").hour
-            except:
-                return datetime.strptime(time_str, "%I:%M %p").hour
-
-    except:
-        pass
-
-    return 12
-
-
-def parse_location(location):
-    if not location:
-        return 0
-
-    loc = str(location).strip().lower()
-    return 0 if loc in ["india", "unknown", ""] else 1
-
-
-def parse_device(device):
-    if not device:
-        return 0
-
-    return 1 if "mobile" in str(device).lower() else 0
+def parse_device(dev):
+    return 1 if "mobile" in str(dev).lower() else 0
 
 
 # ================= ENCODE =================
 def encode(data):
-    return pd.DataFrame(
-        [[
-            parse_device(data.get("device")),
-            parse_location(data.get("location")),
-            safe_int(data.get("loginCount"), 1),
-            parse_time(data.get("time")),
-            safe_int(data.get("failedAttempts"), 0)
-        ]],
-        columns=["device", "location", "loginCount", "hour", "failedAttempts"]
-    )
+    return pd.DataFrame([[
+        parse_device(data.get("device")),
+        parse_location(data.get("location")),
+        safe_int(data.get("loginCount"), 1),
+        parse_time(data.get("time")),
+        safe_int(data.get("failedAttempts"), 0)
+    ]], columns=["device","location","loginCount","hour","failedAttempts"])
 
 
 # ================= PREDICT =================
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.get_json() or {}
+    data = request.get_json()
 
     try:
+        location = get_location(request)
+        data["location"] = location
+
         input_data = encode(data)
 
-        if model is None:
-            raise Exception("Model not loaded")
-
-        pred = int(model.predict(input_data)[0])
+        pred = int(model.predict(input_data)[0]) if model else 0
 
     except Exception as e:
         print("❌ ML Error:", e)
-        pred = 0  # fallback SAFE
+        pred = 0
 
-    print("📊 Input:", data)
+    print("📊", data)
     print("🔮 Prediction:", pred)
 
     return jsonify({"prediction": pred})
