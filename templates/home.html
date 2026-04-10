@@ -27,7 +27,7 @@ import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase
 
 const uid = localStorage.getItem("uid");
 
-// 🔥 LOAD USERNAME (FINAL FIX)
+
 async function loadUsername() {
   if (!uid) return;
 
@@ -50,7 +50,7 @@ async function loadUsername() {
   }
 }
 
-// 🔥 LOAD USER LOGS
+
 async function loadUserData() {
   if (!uid) return;
 
@@ -78,7 +78,7 @@ async function loadUserData() {
   }
 }
 
-// CALL FUNCTIONS
+
 loadUsername();
 loadUserData();
 
