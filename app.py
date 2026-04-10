@@ -41,7 +41,7 @@ def send_email(receiver, otp):
         return False
 
     try:
-        msg             = MIMEText(f"Your Smart MFA OTP is: {otp}\n\nThis OTP is valid for 5 minutes.\nDo not share it with anyone.")
+        msg             = MIMEText(f"Your Smart MFA OTP is: {otp}\n\nThis OTP is valid for 60 seconds.\nDo not share it with anyone.")
         msg["Subject"]  = "Your Smart MFA OTP Code"
         msg["From"]     = EMAIL_SENDER
         msg["To"]       = receiver
