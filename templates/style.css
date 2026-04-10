@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
-
 :root {
   --bg-gradient: linear-gradient(135deg, #4a90d9 0%, #7b5ea7 100%);
   --card-bg:     rgba(255, 255, 255, 0.95);
@@ -12,7 +10,7 @@
   --text-muted:  #6b7280;
   --text-link:   #7b5ea7;
   --shadow:      0 20px 60px rgba(0,0,0,0.25);
-  --font:        'Nunito', sans-serif;
+  --font:        'Segoe UI', Arial, sans-serif;
 }
 
 *, *::before, *::after {
@@ -64,18 +62,18 @@ h3 {
 }
 
 input {
-  width:       100%;
-  padding:     13px 16px;
-  margin:      8px 0;
-  border:      1.5px solid var(--input-border);
-  border-radius:10px;
-  font-size:   0.95rem;
-  font-family: var(--font);
-  color:       var(--text-dark);
-  background:  #f9fafb;
-  outline:     none;
-  transition:  border-color 0.2s, box-shadow 0.2s;
-  display:     block;
+  width:         100%;
+  padding:       13px 16px;
+  margin:        8px 0;
+  border:        1.5px solid var(--input-border);
+  border-radius: 10px;
+  font-size:     0.95rem;
+  font-family:   var(--font);
+  color:         var(--text-dark);
+  background:    #f9fafb;
+  outline:       none;
+  transition:    border-color 0.2s, box-shadow 0.2s;
+  display:       block;
 }
 
 input:focus {
@@ -111,9 +109,9 @@ button:hover {
 }
 
 button:active {
-  transform: translateY(0);
-  box-shadow:none;
-  opacity:   0.9;
+  transform:  translateY(0);
+  box-shadow: none;
+  opacity:    0.9;
 }
 
 button:nth-of-type(2) {
