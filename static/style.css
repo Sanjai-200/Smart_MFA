@@ -29,9 +29,9 @@ body {
   background-attachment: fixed;
   min-height:            100vh;
   display:               flex;
-  align-items:           center;
+  align-items:           flex-start;
   justify-content:       center;
-  padding:               20px;
+  padding:               60px 20px;
   color:                 var(--text-dark);
   overflow-y:            auto;
 }
@@ -47,7 +47,7 @@ body {
   animation:     fadeUp 0.5s ease both;
   position:      relative;
   z-index:       1;
-  margin:        auto;
+  margin:        0 auto;
 }
 
 @keyframes fadeUp {
