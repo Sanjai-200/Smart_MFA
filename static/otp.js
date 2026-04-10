@@ -1,7 +1,7 @@
 import { auth } from "/static/firebase.js";
 import { doc, setDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
-// ================= VERIFY OTP =================
+
 async function verifyOTP() {
   const entered = document.getElementById("otpInput").value.trim();
   const otp     = localStorage.getItem("otp");
@@ -12,7 +12,7 @@ async function verifyOTP() {
     return;
   }
 
-  // Optional: OTP expiry check (5 minutes)
+  
   const otpTime = parseInt(localStorage.getItem("otpTime") || "0");
   if (Date.now() - otpTime > 5 * 60 * 1000) {
     document.getElementById("msg").innerText = "OTP expired. Please request a new one.";
@@ -24,7 +24,7 @@ async function verifyOTP() {
   if (entered === otp) {
     document.getElementById("msg").innerText = "OTP Verified ✅";
 
-    // ✅ Store activity NOW (after OTP verify) with the pending values saved during login
+    
     try {
       const { db }   = await import("/static/firebase.js");
       const uid      = localStorage.getItem("uid");
@@ -45,13 +45,13 @@ async function verifyOTP() {
         date:            new Date().toISOString().split("T")[0],
         time,
         loginCount,
-        failedAttempts   // overwrite with this session's failed attempts
+        failedAttempts   
       });
 
-      // Reset failed attempts for next session
+      
       localStorage.setItem(email + "_failedAttempts", 0);
 
-      // Clean up pending keys
+      
       localStorage.removeItem("pendingDevice");
       localStorage.removeItem("pendingLocation");
       localStorage.removeItem("pendingTime");
@@ -71,7 +71,7 @@ async function verifyOTP() {
   }
 }
 
-// ================= RESEND OTP =================
+
 async function resendOTP() {
   const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -98,6 +98,6 @@ async function resendOTP() {
   }
 }
 
-// ================= EVENTS =================
+
 document.getElementById("verifyBtn")?.addEventListener("click", verifyOTP);
 document.getElementById("resendBtn")?.addEventListener("click", resendOTP);
