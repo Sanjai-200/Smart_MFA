@@ -19,16 +19,21 @@
   padding: 0;
 }
 
+html, body {
+  height: 100%;
+}
+
 body {
-  font-family:     var(--font);
-  background:      var(--bg-gradient);
-  min-height:      100vh;
-  display:         flex;
-  align-items:     flex-start;        ← changed from center
-  justify-content: center;
-  padding:         60px 20px;         ← changed from 20px
-  color:           var(--text-dark);
-  background-attachment: fixed;       ← add this (fixes bg jumping too)
+  font-family:           var(--font);
+  background:            var(--bg-gradient);
+  background-attachment: fixed;
+  min-height:            100vh;
+  display:               flex;
+  align-items:           center;
+  justify-content:       center;
+  padding:               20px;
+  color:                 var(--text-dark);
+  overflow-y:            auto;
 }
 
 .box {
@@ -40,6 +45,9 @@ body {
   box-shadow:    var(--shadow);
   text-align:    center;
   animation:     fadeUp 0.5s ease both;
+  position:      relative;
+  z-index:       1;
+  margin:        auto;
 }
 
 @keyframes fadeUp {
